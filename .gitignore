@@ -1,4 +1,12 @@
 **/*.pyc
 .venv/
+poetry.lock
 
-.env
+.vscode/
+
+build/
+dist/
+*.spec
+
+*.json
+*.hdf5
