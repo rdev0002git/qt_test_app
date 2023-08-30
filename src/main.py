@@ -3,7 +3,7 @@ import sys
 from PyQt5 import QtWidgets
 
 from src.models import TreeViewModel
-from src.views import MainWidget
+from src.views import MainView
 
 
 def main():
@@ -12,7 +12,7 @@ def main():
 
     model = TreeViewModel()
 
-    window = MainWidget(model)
+    window = MainView(model)
     window.show()
 
     sys.exit(app.exec())
