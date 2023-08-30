@@ -1,22 +1,35 @@
-import sys
-import random
-from dataclasses import dataclass, field
+import json
 
-from PyQt5 import QtWidgets, QtCore, QtGui
-from PyQt5.QtCore import QEvent, QObject
+from PyQt5 import QtCore, QtGui, QtWidgets
+import h5py
+import numpy
+import pyqtgraph
 
 from src.ui.main_widget_ui import Ui_mainWidget
 from src.models import TreeViewModel
+from src.tools import gen_random_tree, hdf5_read_recursive, hdf5_write_recursive
 
 
-class MainWidget(Ui_mainWidget, QtWidgets.QWidget):
+class IntDelegate(QtWidgets.QItemDelegate):
+
+    def createEditor(self, parent: QtWidgets.QWidget, option: QtWidgets.QStyleOptionViewItem, index: QtCore.QModelIndex):
+        editor = QtWidgets.QLineEdit(parent)
+        editor.setValidator(QtGui.QIntValidator())
+        return editor
+
+
+class MainView(Ui_mainWidget, QtWidgets.QWidget):
 
     def __init__(self, tree_view_model: TreeViewModel):
         super().__init__()
 
         # Инициализация UI
         self.setupUi(self)
+        self.graph_widget = pyqtgraph.PlotWidget()
+        self.graph_plot = self.graph_widget.plot([], [])
+        self.graphLayout.addWidget(self.graph_widget)
 
+        self.treeView.setItemDelegate(IntDelegate())
         self.addTreeItemEdit.setValidator(QtGui.QIntValidator())
 
         # Подключение модели данных к TreeView
@@ -24,9 +37,13 @@ class MainWidget(Ui_mainWidget, QtWidgets.QWidget):
         self.treeView.setModel(self.model)
 
         # Подключения к сигналам
-        self.randomizeDataButton.clicked.connect(self.load_randomize_data)
         self.addTreeItemButton.clicked.connect(self.add_tree_item)
         self.deleteTreeItemButton.clicked.connect(self.delete_tree_item)
+        self.loadDataButton.clicked.connect(self.load_data)
+        self.saveDataButton.clicked.connect(self.save_data)
+        self.randomizeDataButton.clicked.connect(self.load_randomize_data)
+        self.model.dataUpdated.connect(self.update_graph)
+
 
     # TREEVIEW
     def add_tree_item(self):
@@ -37,7 +54,7 @@ class MainWidget(Ui_mainWidget, QtWidgets.QWidget):
 
         # Валидация введенного значения
         if value == '':
-            QtWidgets.QToolTip.showText(self.addTreeItemEdit.mapToGlobal(self.addTreeItemEdit.rect().bottomLeft()), "Введите целое число", self.addTreeItemEdit)
+            QtWidgets.QToolTip.showText(self.addTreeItemEdit.mapToGlobal(self.addTreeItemEdit.rect().bottomLeft()), "Нельзя добавить пустое значение!", self.addTreeItemEdit)
             return
 
         # Получение выделенного элемента в TreeView
@@ -46,23 +63,96 @@ class MainWidget(Ui_mainWidget, QtWidgets.QWidget):
 
         self.model.add_item(value, element_index)
 
+        self.update_graph()
+
     def delete_tree_item(self):
         '''Функция удаляющая выделенные элементы в TreeView'''
 
+        # Получение индексов выделенных элементов
         indexes = self.treeView.selectedIndexes()
 
+        # Сортировка индексов от большего к меньшему, чтобы избежать проблемы смещения индексов при удалении
+        indexes = sorted(indexes, key=lambda i: i.row(), reverse=True)
+
+        # Последовательное удаление элементов
         for index in indexes:
             self.model.delete_item(index)
+
+        self.update_graph()
 
     # SIDEBAR
     def load_data(self):
         '''Функция загрузки данных в модель TreeView'''
-        pass
+        
+        file_path, file_path_filters = QtWidgets.QFileDialog().getOpenFileName(self, 'Открыть файл', '.', '*.json;;*.hdf5')
+        if file_path == '': return
+
+        if file_path_filters == '*.json':
+            file_data = json.load(open(file_path, encoding='utf-8'))
+        else:
+            with h5py.File(file_path) as file:
+                file_data = hdf5_read_recursive(file)
+
+        self.model.load_data(file_data)
+
+        self.update_graph()
 
     def save_data(self):
         '''Функция сохранения данных из модели TreeView'''
-        pass
+
+        file_path, file_path_filters = QtWidgets.QFileDialog().getSaveFileName(self, 'Сохранить файл', '.', '*.json;;*.hdf5')
+        if file_path == '': return
+
+        data = self.model.get_data()
+
+        if file_path_filters == '*.json':
+            with open(file_path, 'w', encoding='utf-8') as file:
+                json.dump(data, file, indent='    ')
+        else:
+            with h5py.File(file_path, 'w') as file:
+                hdf5_write_recursive(file, data)
 
     def load_randomize_data(self):
         '''Функция заполнения TreeView рандомными данными'''
-        pass
+        
+        data = gen_random_tree(3, 10, -33, 33, 4)
+        self.model.load_data(data)
+
+        self.update_graph()
+
+    def update_graph(self):
+        
+        data = self.model.get_data()
+
+        def prepare_arr_for_graph(data: list, level: int = 1):
+
+            arr: list[tuple[int | int]] = []
+
+            for data_item in data:
+
+                if isinstance(data_item, list):
+                    arr += prepare_arr_for_graph(data_item, level + 1)
+                else:
+                    arr.append((level, data_item))
+
+            return arr
+
+        self.graph_widget.plotItem.clear()
+
+        if len(data) > 0:
+
+            data_for_graph = prepare_arr_for_graph(data)
+
+            # Преобразование в numpy массив
+            data_array = numpy.array(data_for_graph)
+
+            # Извлечение уникальных уровней
+            levels = numpy.unique(data_array[:, 0])
+
+            # Вычисление сумм для каждого уровня
+            level_sums = [numpy.sum(data_array[data_array[:, 0] == level, 1]) for level in levels]
+
+            # Создание нового двухмерного массива вида (level, level sum)
+            result_array = numpy.column_stack((levels, level_sums))
+
+            self.graph_widget.plot(result_array[:, 0], result_array[:, 1])
