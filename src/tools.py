@@ -1,4 +1,5 @@
 import random
+import h5py
 
 
 def gen_random_tree(elements_min: int, elements_max: int, value_min: int, value_max: int, max_sublevel: int = 0):
@@ -16,3 +17,25 @@ def gen_random_tree(elements_min: int, elements_max: int, value_min: int, value_
             arr.append(value)
 
     return arr
+
+
+def hdf5_read_recursive(group):
+    data = []
+
+    for key in group.keys():
+        item = group[key]
+
+        if isinstance(item, h5py.Group):
+            data.append(hdf5_read_recursive(item))
+        else:
+            data.append(item[()])
+
+    return data
+
+def hdf5_write_recursive(group, data):
+    for n, item in enumerate(data):
+        if isinstance(item, list):
+            subgroup = group.create_group(str(n))
+            hdf5_write_recursive(subgroup, item)
+        else:
+            group.create_dataset(str(n), data=item)
