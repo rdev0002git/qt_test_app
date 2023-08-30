@@ -20,6 +20,8 @@ def gen_random_tree(elements_min: int, elements_max: int, value_min: int, value_
 
 
 def hdf5_read_recursive(group):
+    '''Извлечь данные из данных в формате hdf5'''
+
     data = []
 
     for key in group.keys():
@@ -33,6 +35,8 @@ def hdf5_read_recursive(group):
     return data
 
 def hdf5_write_recursive(group, data):
+    '''Записать данные в указанный hdf5 контейнер в требуемом формате'''
+    
     for n, item in enumerate(data):
         if isinstance(item, list):
             subgroup = group.create_group(str(n))
