@@ -60,9 +60,10 @@ class Ui_mainWidget(object):
         self.treeViewManageLayout.addItem(spacerItem1)
         self.treeViewLayout.addLayout(self.treeViewManageLayout)
         self.contentLayout.addLayout(self.treeViewLayout)
-        self.graphicsView = QtWidgets.QGraphicsView(mainWidget)
-        self.graphicsView.setObjectName("graphicsView")
-        self.contentLayout.addWidget(self.graphicsView)
+        self.graphLayout = QtWidgets.QVBoxLayout()
+        self.graphLayout.setSizeConstraint(QtWidgets.QLayout.SetDefaultConstraint)
+        self.graphLayout.setObjectName("graphLayout")
+        self.contentLayout.addLayout(self.graphLayout)
         self.mainLayout.addLayout(self.contentLayout)
         self.verticalLayout_4.addLayout(self.mainLayout)
 

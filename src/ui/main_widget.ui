@@ -109,7 +109,11 @@
         </layout>
        </item>
        <item>
-        <widget class="QGraphicsView" name="graphicsView"/>
+        <layout class="QVBoxLayout" name="graphLayout">
+         <property name="sizeConstraint">
+          <enum>QLayout::SetDefaultConstraint</enum>
+         </property>
+        </layout>
        </item>
       </layout>
      </item>
