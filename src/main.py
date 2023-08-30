@@ -1,9 +1,6 @@
 import sys
-import random
-from dataclasses import dataclass, field
 
-from PyQt5 import QtWidgets, QtCore, QtGui
-from PyQt5.QtCore import QEvent, QObject
+from PyQt5 import QtWidgets
 
 from src.models import TreeViewModel
 from src.views import MainWidget
