@@ -8,6 +8,7 @@ class TreeViewModel(QtGui.QStandardItemModel):
     def __init__(self):
         super().__init__()
 
+        # Установка заголовка
         self.setHorizontalHeaderLabels(['Дерево'])
 
         # Подключения к сигналам
@@ -15,41 +16,60 @@ class TreeViewModel(QtGui.QStandardItemModel):
         self.rowsRemoved.connect(self.update_node_by_changed_row)
         self.dataChanged.connect(self.update_by_changed_item)
 
+
     def item_children_value_sum(self, item: QtGui.QStandardItem):
         '''Функция возвращает сумму значений потомков элемента'''
         return sum([int(item.child(i).text()) for i in range(item.rowCount())])
 
+
     def set_item_bg_color_by_value(self, item: QtGui.QStandardItem, value: int):
+        '''Установить цвет для элемента в зависимости от полученного значения'''
 
         if value >= 0:
+            # Установить зеленый цвет фона элемента
             item.setBackground(QtGui.QColor('#9CCC65'))
         else:
+            # Установить красный цвет фона элемента
             item.setBackground(QtGui.QColor('#EF5350'))
+
 
     def update_node_by_changed_row(self, index: list[QtCore.QModelIndex]):
         '''Функция обновления элемента связанного с измененной строкой'''
 
-        node = self.itemFromIndex(index)
+        # Получение элемента по индексу
+        item = self.itemFromIndex(index)
 
-        if node:
+        # Проверка, получен ли элемент по индексу
+        # На случай если был указан индекс корневого невидимого элемента
+        if item:
+            
+            # Если у элемента есть потомки
+            if item.rowCount() != 0:
+                
+                # Получение суммы значений потомков
+                # и указание ее в качестве значений элемента
+                item_sum = self.item_children_value_sum(item)
+                item.setText(str(item_sum))
 
-            if node.rowCount() != 0:
+                # Проверка возможности редактирования в GUI значения элемента
+                # и отключение ее, если эта возможность активна, так как элемент
+                # с потомками считается "Узлом", и его значения вычисляется автоматически
+                if item.isEditable():
+                    item.setEditable(False)
 
-                node_sum = self.item_children_value_sum(node)
-                node.setText(str(node_sum))
-
-                if node.isEditable():
-                    node.setEditable(False)
-
-                self.set_item_bg_color_by_value(node, node_sum)
+                self.set_item_bg_color_by_value(item, item_sum)
 
             else:
-                node.setText(str(0))
-                node.setEditable(True)
-                node.setBackground(QtGui.QColor('#FFFFFFFF'))
+                # Если у элемента нет потомков, то это означает,
+                # что обращение к этой функции вызвано удалением
+                # имеющихся потомков элемента, а значит элемент стал "Листом"
+                item.setText(str(0))
+                item.setEditable(True)
+                item.setBackground(QtGui.QColor('#FFFFFFFF'))
+
 
     def update_by_changed_item(self, index: QtCore.QModelIndex):
-        '''Функция обновления элемента и его связей'''
+        '''Функция обновления родителя элемента'''
 
         # Получение родителя элемента
         parent = self.itemFromIndex(index).parent()
@@ -60,7 +80,15 @@ class TreeViewModel(QtGui.QStandardItemModel):
 
             self.set_item_bg_color_by_value(parent, children_value_sum)
         else:
+            # Если родитель элемента не получен, значит в функцию был передан индекс
+            # корневого невидимого элемента.
+            # Так как вызов данный функции привязан к сигналу об изменении
+            # данных элемента модели, а данная функция изменяет данные родителя элемента,
+            # то через сигнал об изменении вызывает сама себя уже для родителя текущего элемента.
+            # Так последовательно функция идет до корневого элемента. И получение его означает, что
+            # последовательное обновление данных завершено. Для чего активируется соответствующий сигнал.
             self.dataUpdated.emit()
+
 
     def add_item(self, value: str, index: QtCore.QModelIndex = None):
         '''Добавить элемент в модель относительно указанного индекса'''
@@ -80,11 +108,13 @@ class TreeViewModel(QtGui.QStandardItemModel):
         # Добавление "Лепестка"
         parent.appendRow(QtGui.QStandardItem(value))
 
+
     def delete_item(self, index: QtCore.QModelIndex):
         '''Удалить по индексу элемент из модели'''
 
         # Удаление элемента
         self.removeRow(index.row(), index.parent())
+
 
     def load_data(self, data: list):
 
@@ -124,8 +154,10 @@ class TreeViewModel(QtGui.QStandardItemModel):
 
 
     def get_data(self):
+        '''Получить данные содержащиеся в модели'''
 
         def get_item_data(item: QtGui.QStandardItem):
+            '''Получить значения элемента и его потомков'''
 
             item_data = []
 
