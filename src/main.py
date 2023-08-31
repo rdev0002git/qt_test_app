@@ -13,6 +13,7 @@ def main():
     model = TreeViewModel()
 
     window = MainView(model)
+    window.setWindowTitle('PyQt Test App')
     window.show()
 
     sys.exit(app.exec())
