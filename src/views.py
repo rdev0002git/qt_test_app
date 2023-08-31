@@ -82,6 +82,7 @@ class MainView(Ui_mainWidget, QtWidgets.QWidget):
         indexes = sorted(indexes, key=lambda i: i.row(), reverse=True)
 
         def get_index_level(index: QtCore.QModelIndex):
+            '''Получения числа основанного на номерах строк индексов родителей'''
 
             levels = []
 
@@ -159,9 +160,12 @@ class MainView(Ui_mainWidget, QtWidgets.QWidget):
             for data_item in data:
 
                 if isinstance(data_item, list):
-                    # Рекурсивное извлечение данных из вложенного списка
+                    # Рекурсивное извлечение данных из "Узла"
                     values = prepare_arr_for_graph(data_item, level + 1)
+
+                    # Добавление суммы "Узла" из полученных значений
                     arr.append((level, sum([value[1] for value in values if value[0] == level + 1])))
+
                     arr += values
                 else:
                     arr.append((level, data_item))
