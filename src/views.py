@@ -80,7 +80,22 @@ class MainView(Ui_mainWidget, QtWidgets.QWidget):
 
         # Сортировка индексов от большего к меньшему, чтобы избежать проблемы смещения индексов при удалении
         indexes = sorted(indexes, key=lambda i: i.row(), reverse=True)
-        indexes = sorted(indexes, key=lambda i: i.parent().row(), reverse=True)
+
+        def get_index_level(index: QtCore.QModelIndex):
+
+            levels = []
+
+            parent = index.parent()
+            
+            if parent.row() != -1:
+                levels += get_index_level(parent)
+                levels.append(str(index.row()))
+
+            if len(levels): return levels
+            else: return '0'
+
+        indexes_with_level = [(index, int(''.join(get_index_level(index)))) for index in indexes]
+        indexes = [el[0] for el in sorted(indexes_with_level, key=lambda i: i[1], reverse=True)]
 
         # Последовательное удаление элементов
         for index in indexes:
@@ -133,7 +148,7 @@ class MainView(Ui_mainWidget, QtWidgets.QWidget):
     def update_graph(self):
         '''Обновить график'''
         
-        def prepare_arr_for_graph(data: list, level: int = 1):
+        def prepare_arr_for_graph(data: list, level: int = 0):
             '''
             Извлечь данные, из указанного иерархического списка,
             в виде массива: level - уровень вложенности в дереве, value- значение
@@ -146,7 +161,7 @@ class MainView(Ui_mainWidget, QtWidgets.QWidget):
                 if isinstance(data_item, list):
                     # Рекурсивное извлечение данных из вложенного списка
                     values = prepare_arr_for_graph(data_item, level + 1)
-                    arr.append((level, sum([value[1] for value in values])))
+                    arr.append((level, sum([value[1] for value in values if value[0] == level + 1])))
                     arr += values
                 else:
                     arr.append((level, data_item))
@@ -161,9 +176,10 @@ class MainView(Ui_mainWidget, QtWidgets.QWidget):
 
         # Если есть данные на основе которых можно построить график
         if len(data) > 0:
-            
+
             # Преобразование данных в двумерный массив
             data_for_graph = prepare_arr_for_graph(data)
+            print(data_for_graph)
             data_array = numpy.array(data_for_graph)
 
             # Извлечение уникальных уровней
