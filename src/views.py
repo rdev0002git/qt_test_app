@@ -92,8 +92,8 @@ class MainView(Ui_mainWidget, QtWidgets.QWidget):
                 levels += get_index_level(parent)
                 levels.append(str(index.row()))
 
-            if len(levels): return levels
-            else: return '0'
+            if len(levels) != 0: return levels
+            else: return [str(index.row())]
 
         indexes_with_level = [(index, int(''.join(get_index_level(index)))) for index in indexes]
         indexes = [el[0] for el in sorted(indexes_with_level, key=lambda i: i[1], reverse=True)]
