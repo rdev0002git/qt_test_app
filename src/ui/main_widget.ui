@@ -113,6 +113,13 @@
          <property name="sizeConstraint">
           <enum>QLayout::SetDefaultConstraint</enum>
          </property>
+         <item>
+          <widget class="QLabel" name="label">
+           <property name="text">
+            <string>График</string>
+           </property>
+          </widget>
+         </item>
         </layout>
        </item>
       </layout>

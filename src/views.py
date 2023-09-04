@@ -1,6 +1,7 @@
 import json
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtWidgets import QWidget
 import h5py
 import numpy
 import pyqtgraph
@@ -10,7 +11,7 @@ from src.models import TreeViewModel
 from src.tools import gen_random_tree, hdf5_read_recursive, hdf5_write_recursive
 
 
-class IntDelegate(QtWidgets.QItemDelegate):
+class CustomDelegate(QtWidgets.QItemDelegate):
     '''Класс реализующий методы для создания, настройки и валидации редактора элемента дерева TreeView.'''
 
     def createEditor(self, parent: QtWidgets.QWidget, option: QtWidgets.QStyleOptionViewItem, index: QtCore.QModelIndex):
@@ -22,6 +23,12 @@ class IntDelegate(QtWidgets.QItemDelegate):
         editor = QtWidgets.QLineEdit(parent)
         editor.setValidator(QtGui.QIntValidator())
         return editor
+
+    def setModelData(self, editor: QWidget, model: TreeViewModel, index: QtCore.QModelIndex) -> None:
+        '''Метод завершает редактирование элемента и записывает данные в модель'''
+        super().setModelData(editor, model, index)
+        model.update_item_parents_data(model.itemFromIndex(index))
+        model.dataUpdated.emit()
 
 
 class MainView(Ui_mainWidget, QtWidgets.QWidget):
@@ -35,24 +42,71 @@ class MainView(Ui_mainWidget, QtWidgets.QWidget):
         self.graph_plot = self.graph_widget.plot([], [])
         self.graphLayout.addWidget(self.graph_widget)
 
-        # Установка делегата для элементов TreeView
-        self.treeView.setItemDelegate(IntDelegate())
-        self.addTreeItemEdit.setValidator(QtGui.QIntValidator())
-
         # Подключение модели данных к TreeView
         self.model = tree_view_model
         self.treeView.setModel(self.model)
 
+        # Установка делегата для элементов TreeView
+        self.treeView.setItemDelegate(CustomDelegate())
+        self.addTreeItemEdit.setValidator(QtGui.QIntValidator())
+
         # Подключения методов к сигналам
+        self.model.dataUpdated.connect(self.update_bg_color_second_lvl_elements)
+
+        # Content Layout
+        self.treeView.doubleClicked.connect(self.handle_double_click_on_tree_item)
         self.addTreeItemButton.clicked.connect(self.add_tree_item)
         self.deleteTreeItemButton.clicked.connect(self.delete_tree_item)
+
+        # Sidebar Layout
         self.loadDataButton.clicked.connect(self.load_data)
         self.saveDataButton.clicked.connect(self.save_data)
         self.randomizeDataButton.clicked.connect(self.load_randomize_data)
+
+        # Graph Layout
         self.model.dataUpdated.connect(self.update_graph)
+
+    
+    def handle_double_click_on_tree_item(self, index: QtCore.QModelIndex):
+        '''
+        Обработчик двойного клика по элементу TreeView, проверяет и указывает
+        можно ли редактировать элемент.
+        Если у элемента есть потомки, то редактирование запрещено, т. к. элемент
+        является узлом.        
+        '''
+
+        if index.model().rowCount(index) > 0:
+            self.model.itemFromIndex(index).setEditable(False)
+        else:
+            self.model.itemFromIndex(index).setEditable(True)
 
 
     # TREEVIEW
+    def update_bg_color_second_lvl_elements(self):
+        '''Обновить цвета фона элементов второго уровня'''
+
+        # Цикл прохода по элементам первого уровня
+        for i in range(self.model.rowCount()):
+            lvl_1_element = self.model.item(i)
+
+            # Цикл прохода по элементам второго уровня
+            for ii in range(lvl_1_element.rowCount()):
+                lvl_2_element = lvl_1_element.child(ii)
+
+                # Если элемент второго уровня - Узел
+                if lvl_2_element.rowCount() > 0:
+
+                    if int(lvl_2_element.text()) >= 0:
+                        # Установить зеленый цвет фона элемента
+                        lvl_2_element.setBackground(QtGui.QColor('#9CCC65'))
+                    else:
+                        # Установить красный цвет фона элемента
+                        lvl_2_element.setBackground(QtGui.QColor('#EF5350'))
+
+                else:
+                    lvl_2_element.setBackground(QtGui.QBrush())
+
+
     def add_tree_item(self):
         '''Добавить элемент в TreeView'''
 
@@ -62,15 +116,15 @@ class MainView(Ui_mainWidget, QtWidgets.QWidget):
         # Валидация введенного значения
         if value == '':
             QtWidgets.QToolTip.showText(self.addTreeItemEdit.mapToGlobal(self.addTreeItemEdit.rect().bottomLeft()), "Нельзя добавить пустое значение!", self.addTreeItemEdit)
-            return
+            return None
 
-        # Получение выделенного элемента в TreeView
+        # Получение первого выделенного элемента в TreeView
         try: element_index = self.treeView.selectedIndexes()[0]
         except: element_index = None
 
-        self.model.add_item(value, element_index)
+        # Добавление нового элемента в модель
+        self.model.add_item(value, element_index) 
 
-        self.update_graph()
 
     def delete_tree_item(self):
         '''Удалить выделенные элементы из TreeView'''
@@ -96,13 +150,12 @@ class MainView(Ui_mainWidget, QtWidgets.QWidget):
             else: return [str(index.row())]
 
         indexes_with_level = [(index, int(''.join(get_index_level(index)))) for index in indexes]
-        indexes = [el[0] for el in sorted(indexes_with_level, key=lambda i: i[1], reverse=True)]
+        indexes = [element[0] for element in sorted(indexes_with_level, key=lambda i: i[1], reverse=True)]
 
         # Последовательное удаление элементов
         for index in indexes:
             self.model.delete_item(index)
 
-        self.update_graph()
 
     # SIDEBAR
     def load_data(self):
@@ -120,7 +173,6 @@ class MainView(Ui_mainWidget, QtWidgets.QWidget):
 
         self.model.load_data(file_data)
 
-        self.update_graph()
 
     def save_data(self):
         '''Сохранить данные из TreeView'''
@@ -138,14 +190,15 @@ class MainView(Ui_mainWidget, QtWidgets.QWidget):
             with h5py.File(file_path, 'w') as file:
                 hdf5_write_recursive(file, data)
 
+
     def load_randomize_data(self):
         '''Заполнить TreeView рандомными данными'''
 
         data = gen_random_tree(3, 10, -33, 33, 4)
         self.model.load_data(data)
 
-        self.update_graph()
 
+    # GRAPH
     def update_graph(self):
         '''Обновить график'''
         
@@ -183,7 +236,6 @@ class MainView(Ui_mainWidget, QtWidgets.QWidget):
 
             # Преобразование данных в двумерный массив
             data_for_graph = prepare_arr_for_graph(data)
-            print(data_for_graph)
             data_array = numpy.array(data_for_graph)
 
             # Извлечение уникальных уровней
